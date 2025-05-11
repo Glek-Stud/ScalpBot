@@ -1,3 +1,13 @@
-.venv/
+# Python bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db

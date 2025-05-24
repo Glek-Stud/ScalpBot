@@ -1,9 +1,3 @@
-"""BTC‑USDT 1‑minute trading environment (Gymnasium).
-Step4/9— trade‑execution engine (position flips, commission, slippage, leverage) ⚙️
-
-➡️ **Patch1**: align Close‑price series to feature index to fix length mismatch.
-Rewards still stubbed at 0.0; next step wires true reward calculus.
-"""
 from __future__ import annotations
 
 import json
@@ -18,7 +12,7 @@ import pandas as pd
 # -----------------------------------------------------------------------------
 # Project‑local util
 # -----------------------------------------------------------------------------
-from utils.data_loader import load_features, DATA as DATA_PATH  # sibling package import
+from .utils.data_loader import load_features, DATA as DATA_PATH
 
 # Global paths (reuse data_loader's resolution logic)
 HERE = Path(__file__).resolve()
@@ -59,6 +53,8 @@ class BTCTradingEnv(gym.Env):
         leverage: float = 1.0,
         spread_pct: float = 1e-4,  # 1 bp slippage
         lambda_penalty: float | None = None,
+        noise_sigma: float = 0.01,
+
     ) -> None:
         super().__init__()
 
@@ -69,6 +65,7 @@ class BTCTradingEnv(gym.Env):
         self.random_start = bool(random_start)
         self.leverage = float(leverage)
         self.spread_pct = float(spread_pct)
+        self.noise_sigma: float = float(noise_sigma)
 
         # Commission params ---------------------------------------------------
         if commission_scheme not in _COMMISSION_TABLE:
@@ -116,24 +113,52 @@ class BTCTradingEnv(gym.Env):
         self._equity0 = self._equity = self._cash = 1.0
         self._equity_floor: float = 0.5
 
+
+        if mode == "train":
+            left = 0
+            right = self._splits["train_end"]
+        elif mode == "val":
+            left = self._splits["train_end"]
+            right = self._splits["val_end"]
+        else:  # test
+            left = self._splits["val_end"]
+            right = len(self._features)
+
+        self._slice_left = left
+        self._slice_right = right  # exclusive
+
     # ------------------------------------------------------------------
     # Gym API
     # ------------------------------------------------------------------
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         super().reset(seed=seed)
         rng = np.random.default_rng(seed)
+
+        # 1️⃣ pick episode start -----------------------------------------------
         start_low, start_high = self._slice_bounds(self.mode)
-        self._start_idx = start_low if not self.random_start else rng.integers(
-            start_low, start_high + 1 - self.max_steps, endpoint=True
+        self._start_idx = (
+            start_low
+            if not self.random_start
+            else rng.integers(start_low, start_high + 1 - self.max_steps, endpoint=True)
         )
         self._idx = self._start_idx
         self._t = 0
         self._position = 0
         self._equity0 = self._equity = self._cash = 1.0
+
+        # 2️⃣ set episode end ---------------------------------------------------
+        # _slice_right was cached as an attribute in __init__
+        self._end_idx = min(self._start_idx + self.max_steps, self._slice_right - 1)
+
+        # 3️⃣ return first observation -----------------------------------------
         obs = self._get_observation()
         return obs, {"t": self._t, "idx": self._idx}
 
     def step(self, action: int):
+        # prevent stepping after env already terminated
+        if self._idx >= self._end_idx or self._t >= self.max_steps:
+            raise RuntimeError("Step called after episode end. Call reset().")
+
         # ---------- ACTION HANDLING ----------
         commission_cost = self._commission_pct
         slippage_cost   = self._spread_pct
@@ -153,8 +178,18 @@ class BTCTradingEnv(gym.Env):
         self._t += 1
         self._idx += 1
 
-        terminated = self._t >= self.max_steps  # not _max_steps
-        truncated = False  # no time truncation yet
+        terminated = False
+        truncated = False
+
+        # time / index limits
+        if self._idx >= self._end_idx:
+            # reached bound set by slice or max_steps
+            if self._idx >= self._slice_right - 1:
+                # ran off dataset → truncate
+                truncated = True
+            else:
+                # hit user-defined max_steps → terminate
+                terminated = True
 
         # ---------- P/L & EQUITY UPDATE ----------
         if self._idx < len(self._close):
@@ -170,6 +205,9 @@ class BTCTradingEnv(gym.Env):
         # multiplicative equity update in *unit* space
         equity_change = pnl - commission_cost - slippage_cost - penalty_lv
         self._equity *= (1.0 + equity_change)
+        if not np.isfinite(self._equity):
+            raise FloatingPointError("Equity became NaN or inf — check reward calculation.")
+
 
         # reward is exactly the fractional change
         reward = np.float32(equity_change)
@@ -189,6 +227,8 @@ class BTCTradingEnv(gym.Env):
         "commission": np.float32(commission_cost),
         "slippage": np.float32(slippage_cost),
         "reward_raw": reward,
+        "terminated": terminated,
+        "truncated": truncated,
         }
 
         return obs, reward, terminated, truncated, info
@@ -208,6 +248,11 @@ class BTCTradingEnv(gym.Env):
         market = self._features[self._idx]
         equity_ratio = self._equity / self._equity0 - 1.0
         obs = np.concatenate([market, [self._position, equity_ratio]]).astype(np.float32)
+
+        if self.noise_sigma > 0.0 and self.mode == "train":
+            noise = np.random.normal(0.0, self.noise_sigma, size=obs.shape).astype(np.float32)
+            obs = obs + noise
+
         assert obs.shape == (9,) and obs.dtype == np.float32
         return obs
 
@@ -222,27 +267,46 @@ class BTCTradingEnv(gym.Env):
         return 0.0
 
     # ------------------------------------------------------------------
-    def render(self, mode="human"):
+    # ---------------------------------------------------------------------
+    # RENDER: quick Matplotlib view (price + equity)
+    # ---------------------------------------------------------------------
+    def render(self, mode: str = "human"):
         if mode != "human":
-            raise NotImplementedError
-        print(
-            f"t={self._t} idx={self._idx} price={self._close[self._idx]:.2f} "
-            f"pos={self._position} equity={self._equity:.4f}"
-        )
+            return  # only human mode supported
+
+        import matplotlib.pyplot as plt
+
+        # cache history in object attributes
+        if not hasattr(self, "_render_cache"):
+            self._render_cache = {"t": [], "price": [], "equity": []}
+
+        self._render_cache["t"].append(self._t)
+        self._render_cache["price"].append(float(self._close[self._idx]))
+        self._render_cache["equity"].append(float(self._equity))
+
+        # update plot once every 300 steps to avoid slowdown
+        if self._t % 300 != 0 and self._t != self.max_steps:
+            return
+
+        plt.clf()
+        ax1 = plt.gca()
+        ax1.plot(self._render_cache["t"], self._render_cache["price"],
+                 label="Close", alpha=0.6)
+        ax1.set_xlabel("step")
+        ax1.set_ylabel("Price (USDT)")
+
+        ax2 = ax1.twinx()
+        ax2.plot(self._render_cache["t"], self._render_cache["equity"],
+                 label="Equity", color="tab:blue")
+        ax2.set_ylabel("Equity (unit)")
+
+        ax1.legend(loc="upper left")
+        ax2.legend(loc="upper right")
+        plt.pause(0.001)
 
     def close(self):
-        pass
+        if hasattr(self, "_render_cache"):
+            self._render_cache.clear()
 
 
-# ----------------------------------------------------------------------------
-# Smoke test
-# ----------------------------------------------------------------------------
-if __name__ == "__main__":
-    env = BTCTradingEnv(mode="train", max_steps=5, random_start=False,
-                        commission_scheme="usdtm_regular", leverage=2)
-    obs, info = env.reset(seed=0)
-    print("t pos reward equity")
-    for a in [1, 0, 2, 0]:
-        obs, r, term, trunc, info = env.step(a)
-        print(info["t"], info["position"], f"{r:.6f}", f"{info['equity']:.4f}")
-    env.close()
+

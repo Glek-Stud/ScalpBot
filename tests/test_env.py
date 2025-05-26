@@ -10,15 +10,16 @@ from envs.btc_dqn_env import BTCTradingEnv
 # test helpers
 # ------------------------------------------------------------
 
-def make_env_train_fixed(max_steps: int = 1_000, **kwargs) -> BTCTradingEnv:
-    """Factory that returns a deterministic env (noise off, fixed start)."""
+def make_env_train_fixed(max_steps=1_000, **kw):
     return BTCTradingEnv(
         mode="train",
-        max_steps=max_steps,
+        cfg_name="env_binance_tier0",
         random_start=False,
-        commission_scheme="usdtm_regular",
         noise_sigma=0.0,
-        **kwargs,                # leverage (or anything else) comes in here
+        funding_enabled=False,
+        use_maker_probability=0.0,   # <-- always taker
+        max_steps=max_steps,
+        **kw
     )
 
 
@@ -34,7 +35,7 @@ def manual_reward_trace(env: BTCTradingEnv, actions):
     for a in actions:
         commission = slippage = 0.0
         if a != pos:
-            commission = env._commission_pct
+            commission = env._commission_taker  # assume taker for flips
             slippage = env._spread_pct
             pos = {0: 0, 1: 1, 2: -1}[a]
         ret = (close[idx + 1] - close[idx]) / close[idx]
@@ -102,9 +103,11 @@ def test_lowvol_penalty():
     _, r_trade, _, _, _ = env2.step(1)
 
     # Reward with trade should be exactly lower by λ
-    np.testing.assert_allclose(r_hold - r_trade, λ, rtol=0, atol=1e-8)
-
-
+    fee = env._commission_taker
+    slip = env._spread_pct
+    expected_delta = fee + slip + λ
+    np.testing.assert_allclose(r_hold - r_trade, expected_delta,
+                               rtol=0, atol=1e-8)
 
 
 # ------------------------------------------------------------

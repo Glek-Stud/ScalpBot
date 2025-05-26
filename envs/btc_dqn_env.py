@@ -13,6 +13,7 @@ import pandas as pd
 # Project‑local util
 # -----------------------------------------------------------------------------
 from .utils.data_loader import load_features, DATA as DATA_PATH
+from .utils.config import load_cfg
 
 # Global paths (reuse data_loader's resolution logic)
 HERE = Path(__file__).resolve()
@@ -49,11 +50,9 @@ class BTCTradingEnv(gym.Env):
         mode: str = "train",  # {train, val, test}
         max_steps: int = 10_000,
         random_start: bool = False,
-        commission_scheme: str = "usdtm_regular",
-        leverage: float = 1.0,
-        spread_pct: float = 1e-4,  # 1 bp slippage
-        lambda_penalty: float | None = None,
-        noise_sigma: float = 0.01,
+        cfg_name: str = "env_binance_tier0",
+        noise_sigma: float = 0.0,
+        **overrides,
 
     ) -> None:
         super().__init__()
@@ -63,23 +62,35 @@ class BTCTradingEnv(gym.Env):
         self.mode = mode
         self.max_steps = int(max_steps)
         self.random_start = bool(random_start)
-        self.leverage = float(leverage)
-        self.spread_pct = float(spread_pct)
         self.noise_sigma: float = float(noise_sigma)
 
-        # Commission params ---------------------------------------------------
-        if commission_scheme not in _COMMISSION_TABLE:
-            raise ValueError(f"Unknown commission_scheme: {commission_scheme}")
-        self.fee_taker = _COMMISSION_TABLE[commission_scheme]["taker"]
+        _cfg = load_cfg(cfg_name)
+        _cfg.update(overrides)  # kwargs win over YAML
 
-        self._commission_pct: float = _COMMISSION_TABLE[commission_scheme]["taker"]
-        self._spread_pct: float = float(spread_pct)
+        # Short alias so later code is cleaner
+        self.cfg = _cfg
 
+        # ================================
+        # --- economic parameters -------
+        # ================================
+        self.contract_value = _cfg["contract_value"]  # 1.0 USDT by default
 
-        # Low‑vol penalty weight λ = 0.1 × commission by default
-        self._lambda: float = (
-            lambda_penalty if lambda_penalty is not None else 0.1 * self._commission_pct
-        )
+        self._commission_maker = _cfg["maker_pct"]  # 0.00018
+        self._commission_taker = _cfg["taker_pct"]  # 0.00036
+        self._maker_prob = _cfg.get("use_maker_probability", 0.0)
+
+        self._spread_pct = _cfg["spread_pct"]  # 1 bp
+        self._lambda = _cfg["lambda_penalty_factor"] * self._commission_taker
+
+        self.leverage = _cfg["leverage"]  # 2
+        self._equity_floor = _cfg["equity_floor"]  # 0.5
+
+        # funding support (optional)
+        self.funding_enabled = _cfg.get("funding_enabled", False)
+        if self.funding_enabled:
+            fund_file = _cfg["funding_parquet"]
+            fund_df = pd.read_parquet(DATA_PATH / fund_file, columns=["funding_rate"])
+            self._fund_rates = fund_df["funding_rate"].to_numpy(np.float32)
 
         # ------------------------------------------------------------------
         # Load features (7 cols) & align Close prices
@@ -111,7 +122,6 @@ class BTCTradingEnv(gym.Env):
         self._t: int = 0
         self._position: int = 0  # -1/0/+1
         self._equity0 = self._equity = self._cash = 1.0
-        self._equity_floor: float = 0.5
 
 
         if mode == "train":
@@ -155,83 +165,70 @@ class BTCTradingEnv(gym.Env):
         return obs, {"t": self._t, "idx": self._idx}
 
     def step(self, action: int):
-        # prevent stepping after env already terminated
+        # ----- overflow guard -----
         if self._idx >= self._end_idx or self._t >= self.max_steps:
             raise RuntimeError("Step called after episode end. Call reset().")
 
-        # ---------- ACTION HANDLING ----------
-        commission_cost = self._commission_pct
-        slippage_cost   = self._spread_pct
-        price_curr = self._close[self._idx]  # current close
+        price_curr = self._close[self._idx]
 
-        # execute trade if action changes position
-        if action != self._position:
-            # taker trade → commission applied once
-            commission_cost = self._commission_pct
-            # slippage (one-sided spread) applied once
-            slippage_cost = self._spread_pct
-            # flip position
-            self._position = {0: 0, 1: 1, 2: -1}[action]
+        # ----- trading costs via helper -----
+        commission_cost, slippage_cost = self._exec_trade(action)
 
-        # ---------- ADVANCE TIME ----------
+        # ----- advance time -----
         idx_prev = self._idx
         self._t += 1
         self._idx += 1
 
-        terminated = False
-        truncated = False
-
-        # time / index limits
+        # time / slice limits
+        terminated = truncated = False
         if self._idx >= self._end_idx:
-            # reached bound set by slice or max_steps
             if self._idx >= self._slice_right - 1:
-                # ran off dataset → truncate
                 truncated = True
             else:
-                # hit user-defined max_steps → terminate
                 terminated = True
 
-        # ---------- P/L & EQUITY UPDATE ----------
+        # ----- bar return & P/L -----
         if self._idx < len(self._close):
             ret = self._bar_return(idx_prev, self._idx)
         else:
-            # hit end of dataset (shouldn't in normal run)
             ret = 0.0
             terminated = True
 
         pnl = self.leverage * self._position * ret  # fraction of equity
         penalty_lv = self._penalty_lowvol(idx_prev, action)  # λ penalty
-
-        # multiplicative equity update in *unit* space
         equity_change = pnl - commission_cost - slippage_cost - penalty_lv
         self._equity *= (1.0 + equity_change)
         if not np.isfinite(self._equity):
-            raise FloatingPointError("Equity became NaN or inf — check reward calculation.")
+            raise FloatingPointError("Equity became NaN or inf")
 
+        # ----- funding every 8 h (480 bars) -----
+        if self.funding_enabled and (self._idx % 480 == 0):
+            fr = float(self._fund_rates[self._idx])
+            self._equity *= (1.0 + self.leverage * self._position * fr)
 
-        # reward is exactly the fractional change
         reward = np.float32(equity_change)
 
-        # ---------- TERMINATION BY DRAWDOWN ----------
+        # draw-down kill-switch
         if self._equity < self._equity_floor:
             terminated = True
 
-        # ---------- BUILD OBS & INFO ----------
+        # ----- observation & info -----
         obs = self._get_observation()
         info = {
-        "t": self._t,
-        "idx": idx_prev,
-        "price": np.float32(price_curr),
-        "position": self._position,
-        "equity": np.float32(self._equity),
-        "commission": np.float32(commission_cost),
-        "slippage": np.float32(slippage_cost),
-        "reward_raw": reward,
-        "terminated": terminated,
-        "truncated": truncated,
+            "t": self._t,
+            "idx": idx_prev,
+            "price": np.float32(price_curr),
+            "position": self._position,
+            "equity": np.float32(self._equity),
+            "commission": np.float32(commission_cost),
+            "slippage": np.float32(slippage_cost),
+            "reward_raw": reward,
+            "terminated": terminated,
+            "truncated": truncated,
         }
 
         return obs, reward, terminated, truncated, info
+
 
     # ------------------------------------------------------------------
     # Helpers
@@ -265,6 +262,26 @@ class BTCTradingEnv(gym.Env):
         if action != 0 and self._features[idx_curr, self._LVOL_COL] == 1:
             return self._lambda
         return 0.0
+
+    def _exec_trade(self, new_action: int) -> tuple[float, float]:
+        """Flip self._position according to action.
+           Returns (commission_cost, slippage_cost) as fractions of equity.
+        """
+        if new_action == self._position:
+            return 0.0, 0.0  # no trade, no cost
+
+        # --- commission: maker or taker ------------------------------
+        if self.np_random.random() < self._maker_prob:
+            comm_pct = self._commission_maker
+        else:
+            comm_pct = self._commission_taker
+
+        commission_cost = comm_pct
+        slippage_cost = self._spread_pct
+
+        # update position: 0/1/2 -> -1/0/+1
+        self._position = {0: 0, 1: 1, 2: -1}[new_action]
+        return commission_cost, slippage_cost
 
     # ------------------------------------------------------------------
     # ---------------------------------------------------------------------

@@ -174,14 +174,16 @@ class DQNTrainer:
             if render:
                 env.render()
 
-        equity     = np.array(equity)
-        returns    = np.diff(equity) / equity[:-1]
+        equity = np.array(equity)
+        returns = np.diff(equity) / equity[:-1]
+
+        trades = np.array(trades, dtype=np.float32)  # ← add this line
+
         metrics = {
-            "Sharpe":          _sharpe(returns),
-            "WinRate[%]":      _win_rate(np.array(trades)),
-            "MaxDD[%]":        _drawdown(equity),
-            "ProfitFactor":    float(np.sum(trades[ trades > 0])
-                                    / (1e-8 + np.abs(trades[ trades < 0 ]).sum()))
+            "Sharpe": _sharpe(returns),
+            "WinRate[%]": _win_rate(trades),
+            "MaxDD[%]": _drawdown(equity),
+            "ProfitFactor": float(trades[trades > 0].sum() / (1e-8 + np.abs(trades[trades < 0]).sum())),
         }
         return metrics
 

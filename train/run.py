@@ -6,7 +6,7 @@ import argparse
 import tensorflow as tf
 
 from pathlib import Path
-from seeding import set_global_seed
+from .seeding import set_global_seed
 from model import build_q_network, hard_update
 from trainer import DQNTrainer, TrainerParams
 

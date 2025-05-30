@@ -11,10 +11,10 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorboard.plugins.hparams import api as hp
 
-from env_factory      import make_env
-from model            import build_q_network, hard_update
-from replay_buffer    import ReplayBuffer, Transition
-from epsilon          import LinearSchedule
+from .env_factory      import make_env
+from .model            import build_q_network, hard_update
+from .replay_buffer    import ReplayBuffer, Transition
+from .epsilon          import LinearSchedule
 
 
 # --------------------------------------------------------------------------- #

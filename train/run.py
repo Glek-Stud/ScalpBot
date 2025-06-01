@@ -7,7 +7,7 @@ import tensorflow as tf
 
 from pathlib import Path
 from .seeding import set_global_seed
-from model import build_q_network, hard_update
+from .model import build_q_network, hard_update
 from .trainer import DQNTrainer, TrainerParams
 
 
@@ -29,7 +29,6 @@ def main() -> None:
     args = _parse_args()
     set_global_seed(args.seed)
 
-    from env_factory import make_env
 
     if args.mode == "train":
         trainer = DQNTrainer(seed=args.seed,

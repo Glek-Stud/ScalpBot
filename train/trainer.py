@@ -45,13 +45,13 @@ class TrainerParams:
     buffer_cap:    int   = 100_000
     batch_size:    int   = 64
     gamma:         float = 0.99
-    lr:            float = 5e-4
+    lr:            float = 3e-4
     target_freq:   int   = 1_000      # env steps
     warmup_steps:  int   = 2_000
     eps_decay:     int   = 60_000
     val_freq:      int   = 10_000     # env steps
-    patience:      int   = 5          # early-stop on val Sharpe
-    prioritised:   bool  = False
+    patience:      int   = 8          # early-stop on val Sharpe
+    prioritised:   bool  = True
 
 
 class DQNTrainer:
@@ -76,8 +76,19 @@ class DQNTrainer:
         n_actions = self.env_train.action_space.n
 
         # 2) networks ----------------------------------------------------------
-        self.online, self.opt, self.loss_fn = build_q_network(obs_dim, n_actions, params.lr)
-        self.target, _, _ = build_q_network(obs_dim, n_actions, params.lr)
+        self.online, self.opt, self.loss_fn = build_q_network(
+            obs_dim,
+            n_actions,
+            lr=params.lr,
+            hidden_sizes=(128, 128)  # ← wider net
+        )
+        self.target, _, _ = build_q_network(
+            obs_dim,
+            n_actions,
+            lr=params.lr,
+            hidden_sizes=(128, 128)
+        )
+
 
         dummy = tf.zeros((1, obs_dim), dtype=tf.float32)
         _ = self.online(dummy)  # create weights
@@ -87,7 +98,7 @@ class DQNTrainer:
 
         # 3) replay, ε-sched, misc --------------------------------------------
         self.buffer    = ReplayBuffer(params.buffer_cap, obs_dim,
-                                      prioritised=params.prioritised)
+                                      prioritised=True, alpha=0.7)
         self.eps_sched = LinearSchedule(1.0, 0.1, params.eps_decay)
         self.step      = 0
         self.best_sharpe = -np.inf

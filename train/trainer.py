@@ -45,11 +45,11 @@ class TrainerParams:
     buffer_cap:    int   = 100_000
     batch_size:    int   = 64
     gamma:         float = 0.99
-    lr:            float = 1e-3
+    lr:            float = 5e-4
     target_freq:   int   = 1_000      # env steps
     warmup_steps:  int   = 2_000
-    eps_decay:     int   = 30_000
-    val_freq:      int   = 20_000     # env steps
+    eps_decay:     int   = 60_000
+    val_freq:      int   = 10_000     # env steps
     patience:      int   = 5          # early-stop on val Sharpe
     prioritised:   bool  = False
 
@@ -192,25 +192,30 @@ class DQNTrainer:
     # --------------------------------------------------------------------- #
     def _learn(self):
         s, a, r, ns, d, idx = self.buffer.sample(self.params.batch_size)
+        bsz = self.params.batch_size
+        gamma = self.params.gamma
 
-        # TD target
-        max_next_q = tf.reduce_max(self.target(ns), axis=1)
-        tgt = r + (1.0 - d.astype(np.float32)) * self.params.gamma * max_next_q
+        # -------- Double-DQN target ------------------------------------------
+        a_star = tf.argmax(self.online(ns), axis=1, output_type=tf.int32)  # select
+        q_next = self.target(ns)  # evaluate
+        idx2 = tf.stack([tf.range(bsz, dtype=tf.int32), a_star], axis=1)
+        max_next_q = tf.gather_nd(q_next, idx2)  # Q_target(s', a*)
+
+        tgt = r + (1.0 - d.astype(np.float32)) * gamma * max_next_q
+        # ---------------------------------------------------------------------
 
         with tf.GradientTape() as tape:
             q_pred = tf.gather_nd(self.online(s),
-                                  np.stack([np.arange(self.params.batch_size), a], 1))
+                                  tf.stack([tf.range(bsz), a], axis=1))
             loss = self.loss_fn(tgt, q_pred)
 
         grads = tape.gradient(loss, self.online.trainable_variables)
         self.opt.apply_gradients(zip(grads, self.online.trainable_variables))
 
-        # PER prio update
-        td_err = (tgt - q_pred).numpy()
-        self.buffer.update_priority(idx, td_err)
-
+        self.buffer.update_priority(idx, (tgt - q_pred).numpy())
         self._log_scalar("train/loss", K.get_value(loss), self.step)
         self._log_scalar("train/epsilon", self.eps_sched.value(self.step), self.step)
+
 
     def _validate(self) -> float:
         metrics = self.evaluate("val")

@@ -43,10 +43,10 @@ def _win_rate(trades: np.ndarray) -> float:
 @dataclass
 class TrainerParams:
     buffer_cap:    int   = 100_000
-    batch_size:    int   = 64
+    batch_size:    int   = 256
     gamma:         float = 0.99
     lr:            float = 3e-4
-    target_freq:   int   = 1_000      # env steps
+    target_freq:   int   = 500      # env steps
     warmup_steps:  int   = 2_000
     eps_decay:     int   = 60_000
     val_freq:      int   = 10_000     # env steps
@@ -80,13 +80,13 @@ class DQNTrainer:
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=(128, 128)  # ← wider net
+            hidden_sizes=(128, 64, 64)  # ← wider net
         )
         self.target, _, _ = build_q_network(
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=(128, 128)
+            hidden_sizes=(128, 64, 64)
         )
 
 
@@ -245,3 +245,4 @@ class DQNTrainer:
         with open(self.ckpt_dir / f"{name}_params.json", "w") as f:
             json.dump(asdict(self.params), f, indent=2)
         print(f"✔ saved checkpoint → {path}")
+

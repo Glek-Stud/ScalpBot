@@ -1,58 +1,77 @@
-# W:\Jupiter\Thesis\train\run.py
-# run.py  ─ one-click entry-point for train / eval
-
+# train/run.py ─ one-click entry-point for train / eval
 from __future__ import annotations
-import argparse
-import tensorflow as tf
 
+import argparse
 from pathlib import Path
+
 from .seeding import set_global_seed
-from .model import build_q_network, hard_update
 from .trainer import DQNTrainer, TrainerParams
 
 
-# ------------------------------------------------------------------
-# CLI
-# ------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────
+# CLI parser
+# ───────────────────────────────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("--mode", choices=["train", "eval"], default="train",
-                   help="train = learn + val  |  eval = load best ckpt and back-test")
+    p = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    p.add_argument(
+        "--mode",
+        choices=["train", "eval"],
+        default="train",
+        help="train = learn + val | eval = back-test on test slice",
+    )
     p.add_argument("--seed", type=int, default=42, help="global RNG seed")
-    p.add_argument("--logdir", type=Path, default=Path("runs/tensorboard"),
-                   help="TensorBoard output directory")
-    # (later: --cfg, --checkpoint, etc.)
+    p.add_argument(
+        "--logdir",
+        type=Path,
+        default=Path("runs/tensorboard"),
+        help="TensorBoard / checkpoint directory",
+    )
+
+    # NEW: flag that toggles the dueling architecture
+    p.add_argument(
+        "--dueling",
+        action="store_true",
+        help="use dueling value-advantage network head",
+    )
     return p.parse_args()
 
 
+# ───────────────────────────────────────────────────────────────
+# main
+# ───────────────────────────────────────────────────────────────
 def main() -> None:
     args = _parse_args()
     set_global_seed(args.seed)
 
+    # Common hyper-params (adjust as desired)
+    params = TrainerParams(
+        lr=3e-4,
+        batch_size=256,
+        eps_decay=60_000,
+        val_freq=10_000,
+        patience=8,
+        prioritised=True,
+    )
+
+    # Instantiate trainer — pass dueling flag to choose architecture
+    trainer = DQNTrainer(
+        seed=args.seed,
+        logdir=args.logdir,
+        params=params,
+        dueling=args.dueling,      # <-- the switch is forwarded here
+    )
 
     if args.mode == "train":
-        trainer = DQNTrainer(seed=args.seed,
-                             logdir=args.logdir,
-                             params=TrainerParams())
-        trainer.train(max_steps=300_000)
-
+        trainer.train(max_steps=400_000)
 
     else:  # eval / back-test
-        trainer = DQNTrainer(seed=args.seed,
-                             logdir=args.logdir,
-                             params=TrainerParams())
-        # load best checkpoint before evaluate
-        trainer.online.load_weights(args.logdir / "checkpoints" / "dqn_best.h5")
+        # load best checkpoint then evaluate on test slice
+        ckpt = args.logdir / "checkpoints" / "dqn_best.h5"
+        trainer.online.load_weights(ckpt)
         metrics = trainer.evaluate("test")
         print("Test metrics:", metrics)
-
-
-
-
-    args = _parse_args()
-    set_global_seed(args.seed)
-
-
 
 
 if __name__ == "__main__":

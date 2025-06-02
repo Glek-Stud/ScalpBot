@@ -77,22 +77,21 @@ class DQNTrainer:
         obs_dim   = self.env_train.observation_space.shape[0]
         n_actions = self.env_train.action_space.n
 
-        # 2) networks ----------------------------------------------------------
+        # obs_dim, n_actions already computed above
         self.online, self.opt, self.loss_fn = build_q_network(
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=params.hidden,  # we'll add this field below
-            dueling=params.dueling,  # new flag
+            hidden_sizes=(128, 128),  # or whatever tuple
+            dueling=True  # ← new flag
         )
         self.target, _, _ = build_q_network(
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=params.hidden,
-            dueling=params.dueling,
+            hidden_sizes=(128, 128),
+            dueling=True
         )
-
 
         dummy = tf.zeros((1, obs_dim), dtype=tf.float32)
         _ = self.online(dummy)  # create weights

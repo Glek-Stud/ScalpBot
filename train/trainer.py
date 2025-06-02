@@ -63,7 +63,9 @@ class DQNTrainer:
                  seed:      int,
                  logdir:    Path,
                  params:    TrainerParams = TrainerParams(),
-                 cfg_name:  str = "env_binance_tier0") -> None:
+                 cfg_name:  str = "env_binance_tier0",
+                 dueling:   bool = False
+                 ) -> None:
 
         self.params   = params
         self.logdir   = logdir
@@ -82,15 +84,16 @@ class DQNTrainer:
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=(128, 128),  # or whatever tuple
-            dueling=True  # ← new flag
+            hidden_sizes=(128, 128),
+            dueling=dueling  # ← pass flag
         )
+
         self.target, _, _ = build_q_network(
             obs_dim,
             n_actions,
             lr=params.lr,
             hidden_sizes=(128, 128),
-            dueling=True
+            dueling=dueling  # ← pass flag
         )
 
         dummy = tf.zeros((1, obs_dim), dtype=tf.float32)

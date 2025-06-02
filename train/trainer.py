@@ -112,9 +112,16 @@ class DQNTrainer:
 
         # 4) TensorBoard -------------------------------------------------------
         self.tb = tf.summary.create_file_writer(str(logdir))
-        # log hyper-params once
+
+        # Convert any non-scalar hparams to string so TensorBoard accepts them
+        safe_hparams = {
+            k: (str(v) if isinstance(v, (tuple, list, dict)) else v)
+            for k, v in asdict(params).items()
+        }
+
         with self.tb.as_default():
-            hp.hparams(asdict(params))
+            hp.hparams(safe_hparams)
+
 
     # --------------------------------------------------------------------- #
     # public API                                                            #

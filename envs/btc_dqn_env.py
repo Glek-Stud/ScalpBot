@@ -264,6 +264,8 @@ class BTCTradingEnv(gym.Env):
         return 0.0
 
     def _exec_trade(self, action: int) -> tuple[float, float]:
+
+        # 1. translate action to the position we WANT after this bar
         desired_pos = (
             self._position  # Hold keeps current
             if action == 0 else
@@ -271,9 +273,11 @@ class BTCTradingEnv(gym.Env):
             -1  # action == 2
         )
 
+        # 2. no trade → no costs
         if desired_pos == self._position:
             return 0.0, 0.0
 
+        # 3. choose commission side
         if self.np_random.random() < self._maker_prob:
             comm_pct = self._commission_maker
         else:
@@ -282,6 +286,7 @@ class BTCTradingEnv(gym.Env):
         commission_cost = comm_pct
         slippage_cost = self._spread_pct
 
+        # 4. update position
         self._position = desired_pos
         return commission_cost, slippage_cost
 

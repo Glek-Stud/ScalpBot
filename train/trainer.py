@@ -240,6 +240,13 @@ class DQNTrainer:
         self._log_scalar("train/loss", K.get_value(loss), self.step)
         self._log_scalar("train/epsilon", self.eps_sched.value(self.step), self.step)
 
+        if self.step % 5_000 == 0:
+            tf.summary.scalar("debug/avg_reward",
+                              tf.reduce_mean(r), step=self.step)
+
+        max_q = tf.reduce_max(tf.abs(self.online(s)))
+        tf.summary.scalar("debug/q_abs_max", max_q, step=self.step)
+
 
     def _validate(self) -> float:
         metrics = self.evaluate("val")

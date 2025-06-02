@@ -46,12 +46,14 @@ class TrainerParams:
     batch_size:    int   = 256
     gamma:         float = 0.99
     lr:            float = 3e-4
-    target_freq:   int   = 500      # env steps
+    target_freq:   int   = 500
     warmup_steps:  int   = 2_000
     eps_decay:     int   = 60_000
-    val_freq:      int   = 10_000     # env steps
-    patience:      int   = 8          # early-stop on val Sharpe
+    val_freq:      int   = 10_000
+    patience:      int   = 8
     prioritised:   bool  = True
+    dueling:       bool  = True                # ← NEW
+    hidden:        tuple[int, ...] = (128,128) # ← NEW
 
 
 class DQNTrainer:
@@ -80,13 +82,15 @@ class DQNTrainer:
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=(128, 64, 64)  # ← wider net
+            hidden_sizes=params.hidden,  # we'll add this field below
+            dueling=params.dueling,  # new flag
         )
         self.target, _, _ = build_q_network(
             obs_dim,
             n_actions,
             lr=params.lr,
-            hidden_sizes=(128, 64, 64)
+            hidden_sizes=params.hidden,
+            dueling=params.dueling,
         )
 
 

@@ -9,7 +9,7 @@ env = BTCTradingEnv(mode="val", random_start=True,
                     funding_enabled=False)
 obs, _ = env.reset(seed=123)   # new seed → different 10k-bar window
 
-obs, _ = env.reset(seed=42)
+
 
 # open LONG position exactly once
 obs, r, done, trunc, info = env.step(1)   # action 1 = BUY

@@ -48,9 +48,9 @@ class TrainerParams:
     lr:            float = 3e-4
     target_freq:   int   = 500
     warmup_steps:  int   = 2_000
-    eps_decay:     int   = 60_000
+    eps_decay:     int   = 120_000
     val_freq:      int   = 10_000
-    patience:      int   = 8
+    patience:      int   = 10
     prioritised:   bool  = True
     dueling:       bool  = True                # ← NEW
     hidden:        tuple[int, ...] = (128,128) # ← NEW

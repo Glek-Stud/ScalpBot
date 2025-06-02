@@ -1,6 +1,7 @@
 # train/run.py ─ one-click entry-point for train / eval
 from __future__ import annotations
 
+import json
 import argparse
 from pathlib import Path
 
@@ -35,6 +36,15 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="use dueling value-advantage network head",
     )
+
+    p.add_argument(
+        "--params",
+        type=str,
+        default="{}",
+        help="JSON string of TrainerParams overrides "
+             'e.g. --params \'{"lr":2e-4,"target_freq":250}\'',
+    )
+
     return p.parse_args()
 
 
@@ -44,6 +54,9 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     set_global_seed(args.seed)
+
+    overrides = json.loads(args.params)
+    params = TrainerParams(**overrides)
 
     # Common hyper-params (adjust as desired)
     params = TrainerParams(

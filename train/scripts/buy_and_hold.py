@@ -3,7 +3,12 @@ from envs.btc_dqn_env import BTCTradingEnv
 import numpy as np
 from train.trainer import _sharpe, _drawdown
 
-env = BTCTradingEnv(mode="val")
+env = BTCTradingEnv(mode="val", random_start=True,
+                    cfg_name="env_binance_tier0",
+                    use_maker_probability=0.0,
+                    funding_enabled=False)
+obs, _ = env.reset(seed=123)   # new seed → different 10k-bar window
+
 obs, _ = env.reset(seed=42)
 
 # open LONG position exactly once

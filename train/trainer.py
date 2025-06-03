@@ -244,6 +244,8 @@ class DQNTrainer:
             self._log_scalar("debug/avg_reward", float(np.mean(r)), self.step)
             max_q = tf.reduce_max(tf.abs(self.online(s))).numpy()
             self._log_scalar("debug/q_abs_max", float(max_q), self.step)
+            tf.summary.scalar("debug/avg_reward", tf.reduce_mean(r), step=self.step)
+            tf.summary.scalar("debug/q_abs_max", max_q, step=self.step)
 
 
     def _validate(self) -> float:

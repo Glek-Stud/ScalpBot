@@ -54,6 +54,7 @@ class TrainerParams:
     prioritised:   bool  = True
     dueling:       bool  = True                # ← NEW
     hidden:        tuple[int, ...] = (128,128) # ← NEW
+    per_beta_start: float = 0.4  # new field, default 0.4
 
 
 class DQNTrainer:
@@ -215,7 +216,11 @@ class DQNTrainer:
     # internals                                                             #
     # --------------------------------------------------------------------- #
     def _learn(self):
-        s, a, r, ns, d, idx = self.buffer.sample(self.params.batch_size)
+        beta0 = self.params.per_beta_start
+        beta = beta0 + (1.0 - beta0) * min(1.0, self.step / 200_000)
+        # buffer.sample now returns (s, a, r, ns, d, idx, w)
+        s, a, r, ns, d, idx, w = self.buffer.sample(self.params.batch_size, beta)
+        w = tf.convert_to_tensor(w, dtype=tf.float32)  # (batch,)
         bsz = self.params.batch_size
         gamma = self.params.gamma
 
@@ -231,12 +236,14 @@ class DQNTrainer:
         with tf.GradientTape() as tape:
             q_pred = tf.gather_nd(self.online(s),
                                   tf.stack([tf.range(bsz), a], axis=1))
-            loss = self.loss_fn(tgt, q_pred)
+            td_err = tgt - q_pred
+            loss = self.loss_fn(tgt, q_pred) * w  # importance weighting
+            loss = tf.reduce_mean(loss)
 
         grads = tape.gradient(loss, self.online.trainable_variables)
         self.opt.apply_gradients(zip(grads, self.online.trainable_variables))
 
-        self.buffer.update_priority(idx, (tgt - q_pred).numpy())
+        self.buffer.update_priority(idx, tf.abs(td_err).numpy())
         self._log_scalar("train/loss", K.get_value(loss), self.step)
         self._log_scalar("train/epsilon", self.eps_sched.value(self.step), self.step)
 

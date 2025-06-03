@@ -57,6 +57,8 @@ class BTCTradingEnv(gym.Env):
     ) -> None:
         super().__init__()
 
+        self._rw_mean = 0.0
+        self._rw_var = 1.0
         self._LVOL_COL: int = 6
         assert mode in {"train", "val", "test"}
         self.mode = mode
@@ -207,6 +209,12 @@ class BTCTradingEnv(gym.Env):
             self._equity *= (1.0 + self.leverage * self._position * fr)
 
         reward = np.float32(equity_change)
+        alpha = 0.001  # EWMA smoothing
+        self._rw_mean = (1 - alpha) * self._rw_mean + alpha * reward
+        diff = reward - self._rw_mean
+        self._rw_var = (1 - alpha) * self._rw_var + alpha * diff * diff
+        reward_norm = reward / (1e-8 + self._rw_var ** 0.5)
+
 
         # draw-down kill-switch
         if self._equity < self._equity_floor:
@@ -222,12 +230,12 @@ class BTCTradingEnv(gym.Env):
             "equity": np.float32(self._equity),
             "commission": np.float32(commission_cost),
             "slippage": np.float32(slippage_cost),
-            "reward_raw": reward,
+            "reward_raw": reward_norm,
             "terminated": terminated,
             "truncated": truncated,
         }
 
-        return obs, reward, terminated, truncated, info
+        return obs, reward_norm, terminated, truncated, info
 
 
     # ------------------------------------------------------------------

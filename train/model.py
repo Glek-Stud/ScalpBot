@@ -69,7 +69,7 @@ def build_q_network(obs_dim: int,
                     hidden_sizes=hidden_sizes)
     model.build((None, obs_dim))
 
-    optimiser = optimizers.Adam(learning_rate=lr, clipnorm=1.0)
+    optimiser = optimizers.Adam(learning_rate=lr, clipnorm=0.5)
     loss_fn   = tf.keras.losses.Huber()
     return model, optimiser, loss_fn
 

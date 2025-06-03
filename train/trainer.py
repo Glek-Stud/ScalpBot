@@ -218,9 +218,10 @@ class DQNTrainer:
     def _learn(self):
         beta0 = self.params.per_beta_start
         beta = beta0 + (1.0 - beta0) * min(1.0, self.step / 200_000)
-        # buffer.sample now returns (s, a, r, ns, d, idx, w)
+
         s, a, r, ns, d, idx, w = self.buffer.sample(self.params.batch_size, beta)
-        w = tf.convert_to_tensor(w, dtype=tf.float32)  # (batch,)
+        w = tf.convert_to_tensor(w, dtype=tf.float32)
+
         bsz = self.params.batch_size
         gamma = self.params.gamma
 
@@ -251,8 +252,6 @@ class DQNTrainer:
             self._log_scalar("debug/avg_reward", float(np.mean(r)), self.step)
             max_q = tf.reduce_max(tf.abs(self.online(s))).numpy()
             self._log_scalar("debug/q_abs_max", float(max_q), self.step)
-            tf.summary.scalar("debug/avg_reward", tf.reduce_mean(r), step=self.step)
-            tf.summary.scalar("debug/q_abs_max", max_q, step=self.step)
 
 
     def _validate(self) -> float:

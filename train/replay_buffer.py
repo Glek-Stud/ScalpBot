@@ -18,17 +18,6 @@ class Transition:
 
 
 class ReplayBuffer:
-    """Uniform or rank-based Prioritised Experience Replay (PER).
-
-    Parameters
-    ----------
-    capacity : int
-        Max transitions stored (oldest overwritten).
-    obs_dim : int
-        Length of observation vector.
-    prioritised : bool
-        If True, uses rank-based PER (Schaul et al. 2015) with exponent α.
-    """
     def __init__(self,
                  capacity: int,
                  obs_dim: int,
@@ -68,15 +57,25 @@ class ReplayBuffer:
             self._prio[i] = self._td_to_priority(td_error)
         self._advance()
 
-    def sample(self, batch: int) -> Tuple[np.ndarray, ...]:
+    def sample(self, batch: int, beta: float = 1.0) -> Tuple[np.ndarray, ...]:
         """Return a batch (states, actions, rewards, next_states, dones, idx)."""
         idx = self._sample_indices(batch)
-        return (self._states[idx],
+        p = self._prio[idx]
+
+        probs = p / p.sum()
+        N = max(1, self.size)  # current buffer length
+        weights = (N * probs) ** (-beta)
+        weights /= weights.max()  # normalise to ≤ 1
+
+        batch = (self._states[idx],
                 self._actions[idx],
                 self._rewards[idx],
                 self._next_s[idx],
                 self._dones[idx],
-                idx)                       # needed to update prios
+                idx,
+                weights.astype(np.float32))
+
+        return batch
 
     def update_priority(self, idx: np.ndarray, td_errors: np.ndarray) -> None:
         """Post-learning priority update (only if prioritised)."""

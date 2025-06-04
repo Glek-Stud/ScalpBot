@@ -24,7 +24,11 @@ def _parse_args() -> argparse.Namespace:
         default="train",
         help="train = learn + val | eval = back-test on test slice",
     )
-    p.add_argument("--seed", type=int, default=42, help="global RNG seed")
+    p.add_argument(
+        "--seed",
+                   type=int,
+                   default=42,
+                   help="global RNG seed")
     p.add_argument(
         "--logdir",
         type=Path,
@@ -46,6 +50,10 @@ def _parse_args() -> argparse.Namespace:
         help="JSON string of TrainerParams overrides "
              'e.g. --params \'{"lr":2e-4,"target_freq":250}\'',
     )
+    p.add_argument(
+        "--cfg",
+        default="env_binance_tier0",
+        help="name of env YAML inside configs/")
 
     return p.parse_args()
 

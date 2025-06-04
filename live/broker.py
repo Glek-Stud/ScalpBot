@@ -1,18 +1,22 @@
 """Thin wrapper around Binance REST API."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 from binance.client import Client
+from pathlib import Path
+import json
 
 
-def load_keys(path="~/.binance_keys.json"):
-    import json
-    from pathlib import Path
-    p = Path(path).expanduser()
-    with p.open() as f:
+def load_keys(path=None):
+    if path is None:
+        project_root = Path(__file__).parent.parent   # jumps from live/ up to “Thesis NewBranch”
+        path = project_root / "imp info" / "Binance_keys.ipynb"
+    else:
+        path = Path(path).expanduser()
+
+    with path.open() as f:
         data = json.load(f)
+
     return data["key"], data["secret"]
 
 

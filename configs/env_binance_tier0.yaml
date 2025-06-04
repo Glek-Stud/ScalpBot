@@ -1,19 +1,10 @@
-# with 5x leverage = 10 USDT × 5 = 50 USDT exposure on BTC.
-contract_value:        10.0        # margin per unit position = 10 USDT
-leverage:              1           # 5x -> 10 USDT margin -> 50 USDT notional
-
-# ─── Commission & Maker/Taker Mix ────────────────────────────────────────
-maker_pct:             0     # 0.018 % (Tier 0 + BNB discount)
-taker_pct:             0.00036     # 0.036 %
-use_maker_probability: 0.25        # 25 % of flips treated as maker
-
-# ─── Slippage & Low‐Vol Penalty ───────────────────────────────────────────
-spread_pct:            0.0001      # 0.01 % one‐sided slippage per flip
-lambda_penalty_factor: 0.10        # λ = 0.10 × taker_pct on LowVolFlag bars
-
-# ─── Draw‐down / Episode End ─────────────────────────────────────────────
-equity_floor:          0.50        # terminate if equity drops below 50 % of initial
-
-# ─── Funding (disabled here) ─────────────────────────────────────────────
-funding_enabled:       false       # no funding‐rate adjustments in this example
-funding_parquet:       funding_rates.parquet
+contract_value:       10.0
+maker_pct:            0.00000
+taker_pct:            0.04
+use_maker_probability: 0.25
+spread_pct:           0.0001
+lambda_penalty_factor: 0.05
+leverage:             1
+equity_floor:         0.5
+funding_enabled:      false
+funding_parquet:      funding_rates.parquet

@@ -1,0 +1,8 @@
+symbol: BTCUSDT
+interval: 1m
+leverage: 3
+starting_equity: 1000.0
+log_dir: live_logs
+state_path: dqn_best.keras
+dry_run: true
+resync_interval: 300

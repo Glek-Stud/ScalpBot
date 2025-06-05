@@ -1,12 +1,9 @@
-# train/model.py
 from __future__ import annotations
 import tensorflow as tf
 from tensorflow.keras import layers, optimizers
 
 
-# ---------- NEW: DuelingDQN -------------------------------------------------
 class DuelingDQN(tf.keras.Model):
-    """Dueling architecture: separate V(s) and A(s,a) streams."""
     def __init__(self,
                  num_actions: int = 3,
                  hidden_sizes: tuple[int, ...] = (128, 128),
@@ -25,11 +22,8 @@ class DuelingDQN(tf.keras.Model):
         v = self._V(x)
         a = self._A(x)
         return v + (a - tf.reduce_mean(a, axis=1, keepdims=True))
-# --------------------------------------------------------------------------- #
-
 
 class DQN(tf.keras.Model):
-    """Simple MLP for Deep-Q trading (Dense 64×3 + linear head)."""
 
     def __init__(self,
                  num_actions: int = 3,
@@ -63,7 +57,6 @@ def build_q_network(obs_dim: int,
                     ) -> tuple[tf.keras.Model,
                                tf.keras.optimizers.Optimizer,
                                tf.keras.losses.Loss]:
-    """Instantiate & compile either plain or dueling Q-network."""
     net_cls = DuelingDQN if dueling else DQN
     model = net_cls(num_actions=num_actions,
                     hidden_sizes=hidden_sizes)
@@ -76,5 +69,4 @@ def build_q_network(obs_dim: int,
 
 def hard_update(target_net: tf.keras.Model,
                 online_net: tf.keras.Model) -> None:
-    """Copy parameters from online to target net."""
     target_net.set_weights(online_net.get_weights())

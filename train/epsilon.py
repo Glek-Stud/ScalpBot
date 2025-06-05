@@ -1,5 +1,3 @@
-# train/epsilon.py
-"""Simple linear ε-decay schedule."""
 from __future__ import annotations
 
 
@@ -13,6 +11,5 @@ class LinearSchedule:
         self.decay = decay_steps
 
     def value(self, step: int) -> float:
-        """ε at a given global step (clipped)."""
         frac = min(step / self.decay, 1.0)
         return self.start + frac * (self.end - self.start)

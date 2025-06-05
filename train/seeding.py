@@ -1,7 +1,4 @@
-# W:\Jupiter\Thesis\train\seeding.py
-
 import os
-# must come before any TF import:
 os.environ["TF_ENABLE_ONEDNN_OPTS"]   = "0"
 os.environ["TF_DETERMINISTIC_OPS"]    = "1"
 
@@ -21,12 +18,9 @@ def set_global_seed(seed: int = 42) -> None:
 
     os.environ["TF_DETERMINISTIC_OPS"] = "1"
 
-    # NumPy
     np.random.seed(seed)
 
-    # TensorFlow (eager + graph)
     tf.random.set_seed(seed)
 
-    # Optional: deterministic GPU kernels (may slow CuDNN a little)
     os.environ["TF_DETERMINISTIC_OPS"] = "1"
 

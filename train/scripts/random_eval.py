@@ -1,15 +1,14 @@
-"""Run the trading environment with purely random actions."""
 from envs.btc_dqn_env import BTCTradingEnv
 import numpy as np
-from train.trainer import _sharpe, _win_rate, _drawdown  # reuse helpers
+from train.trainer import _sharpe, _win_rate, _drawdown
 
-env = BTCTradingEnv(mode="val")          # use validation slice
+env = BTCTradingEnv(mode="val")
 obs, _ = env.reset(seed=123)
 
 equity, trades = [], []
 done = False
 while not done:
-    a = env.action_space.sample()        # random {0,1,2}
+    a = env.action_space.sample()
     obs, r, done, trunc, info = env.step(a)
     equity.append(info["equity"])
     trades.append(r)

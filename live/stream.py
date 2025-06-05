@@ -1,5 +1,3 @@
-"""WebSocket streaming of Binance 1m klines."""
-
 from __future__ import annotations
 
 import asyncio

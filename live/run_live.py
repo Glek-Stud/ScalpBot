@@ -1,5 +1,3 @@
-"""CLI entry-point for the live trading bot."""
-
 from __future__ import annotations
 
 import argparse

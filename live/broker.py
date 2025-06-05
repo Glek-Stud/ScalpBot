@@ -1,5 +1,3 @@
-"""Thin wrapper around Binance REST API."""
-
 from __future__ import annotations
 from dataclasses import dataclass
 from binance.client import Client
@@ -36,12 +34,8 @@ class Broker:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
-    # helper methods
-    # ------------------------------------------------------------------
 
     def _mark_price(self) -> float:
-        """Return current mark price for configured symbol."""
         try:
             data = self.client.futures_mark_price(symbol=self.cfg.symbol)
             return float(data["markPrice"])
@@ -52,8 +46,6 @@ class Broker:
         usd = self.cfg.starting_equity * self.cfg.leverage
         qty = usd / price
         return float(f"{qty:.3f}")
-
-    # ------------------------------------------------------------------
 
     def update_kline(self, kline: dict):
         self.last_kline = {
@@ -68,13 +60,8 @@ class Broker:
         if self.cfg.dry_run or desired_pos == self.position:
             self.position = desired_pos
             return 0.0, self.position
-        # For brevity we do not implement actual order placement here
         self.position = desired_pos
         return 0.0, self.position
-
-    # ------------------------------------------------------------------
-    # manual trade helpers
-    # ------------------------------------------------------------------
 
     def open_long(self) -> dict:
         price = self._mark_price()

@@ -1,10 +1,7 @@
-"""Oracle policy: always pick the action that would be best
-   for the NEXT minute’s price move."""
 import numpy as np
 from envs.btc_dqn_env import BTCTradingEnv
 from train.trainer import _sharpe, _drawdown
 
-# 1) record prices on the validation slice
 env = BTCTradingEnv(mode="val")
 obs, _ = env.reset(seed=1)
 
@@ -16,12 +13,11 @@ while not done:
 
 prices = np.array(prices, dtype=np.float32)
 
-# 2) build oracle actions (+1 if next price up, -1 if down, 0 last step)
 deltas  = np.sign(np.diff(prices))
-actions = np.where(deltas > 0, 1, 2)            # BUY or SELL
-actions = np.append(actions, 0)                 # final step HOLD
+actions = np.where(deltas > 0, 1, 2)
+actions = np.append(actions, 0)
 
-# 3) replay oracle actions
+
 env.close()
 env = BTCTradingEnv(mode="val")
 env.reset(seed=1)

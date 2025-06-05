@@ -9,13 +9,10 @@ from gymnasium import spaces
 import numpy as np
 import pandas as pd
 
-# -----------------------------------------------------------------------------
-# Project‑local util
-# -----------------------------------------------------------------------------
+
 from .utils.data_loader import load_features, DATA as DATA_PATH
 from .utils.config import load_cfg
 
-# Global paths (reuse data_loader's resolution logic)
 HERE = Path(__file__).resolve()
 PROJECT_ROOT = HERE.parents[1]
 RAW_PARQUET = PROJECT_ROOT / "collect" / "data_final" / "btcusdt_1m_20240511-20250511.parquet"
@@ -41,7 +38,6 @@ _COMMISSION_TABLE = {
 
 
 class BTCTradingEnv(gym.Env):
-    """Gymnasium environment for 1‑minute BTC‑USDT trading."""
 
     metadata = {"render_modes": ["human"], "render_fps": 30}
 
@@ -67,15 +63,11 @@ class BTCTradingEnv(gym.Env):
         self.noise_sigma: float = float(noise_sigma)
 
         _cfg = load_cfg(cfg_name)
-        _cfg.update(overrides)  # kwargs win over YAML
+        _cfg.update(overrides)
 
-        # Short alias so later code is cleaner
         self.cfg = _cfg
 
-        # ================================
-        # --- economic parameters -------
-        # ================================
-        self.contract_value = _cfg["contract_value"]  # 1.0 USDT by default
+        self.contract_value = _cfg["contract_value"]
 
         self._commission_maker = _cfg["maker_pct"]  # 0.00018
         self._commission_taker = _cfg["taker_pct"]  # 0.00036
@@ -87,21 +79,17 @@ class BTCTradingEnv(gym.Env):
         self.leverage = _cfg["leverage"]  # 2
         self._equity_floor = _cfg["equity_floor"]  # 0.5
 
-        # funding support (optional)
         self.funding_enabled = _cfg.get("funding_enabled", False)
         if self.funding_enabled:
             fund_file = _cfg["funding_parquet"]
             fund_df = pd.read_parquet(DATA_PATH / fund_file, columns=["funding_rate"])
             self._fund_rates = fund_df["funding_rate"].to_numpy(np.float32)
 
-        # ------------------------------------------------------------------
-        # Load features (7 cols) & align Close prices
-        # ------------------------------------------------------------------
+
         self._df, self._splits = load_features(zscore=True, add_lowvol=True)
         self._features: np.ndarray = self._df.to_numpy(dtype=np.float32, copy=True)
-        self._data_root: Path = DATA_PATH  # <<<<<<<<<<<<<<<<<<<<<<<< added
+        self._data_root: Path = DATA_PATH
 
-        # Align Close prices to feature index (drop warm‑up rows)
         raw_close = pd.read_parquet(
             self._data_root / "btcusdt_1m_20240511‑20250511.parquet",
             columns=["Close"],
@@ -112,13 +100,11 @@ class BTCTradingEnv(gym.Env):
             self._features
         ), "Price & features length mismatch after alignment!"
 
-        # Spaces --------------------------------------------------------------
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
         )
         self.action_space = spaces.Discrete(3)
 
-        # Internal state vars -------------------------------------------------
         self._start_idx: int = 0
         self._idx: int = 0
         self._t: int = 0
@@ -139,14 +125,11 @@ class BTCTradingEnv(gym.Env):
         self._slice_left = left
         self._slice_right = right  # exclusive
 
-    # ------------------------------------------------------------------
-    # Gym API
-    # ------------------------------------------------------------------
+
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None):
         super().reset(seed=seed)
         rng = np.random.default_rng(seed)
 
-        # 1️⃣ pick episode start -----------------------------------------------
         start_low, start_high = self._slice_bounds(self.mode)
         self._start_idx = (
             start_low
@@ -158,30 +141,24 @@ class BTCTradingEnv(gym.Env):
         self._position = 0
         self._equity0 = self._equity = self._cash = 1.0
 
-        # 2️⃣ set episode end ---------------------------------------------------
         # _slice_right was cached as an attribute in __init__
         self._end_idx = min(self._start_idx + self.max_steps, self._slice_right - 1)
 
-        # 3️⃣ return first observation -----------------------------------------
         obs = self._get_observation()
         return obs, {"t": self._t, "idx": self._idx}
 
     def step(self, action: int):
-        # ----- overflow guard -----
         if self._idx >= self._end_idx or self._t >= self.max_steps:
             raise RuntimeError("Step called after episode end. Call reset().")
 
         price_curr = self._close[self._idx]
 
-        # ----- trading costs via helper -----
         commission_cost, slippage_cost = self._exec_trade(action)
 
-        # ----- advance time -----
         idx_prev = self._idx
         self._t += 1
         self._idx += 1
 
-        # time / slice limits
         terminated = truncated = False
         if self._idx >= self._end_idx:
             if self._idx >= self._slice_right - 1:
@@ -189,7 +166,6 @@ class BTCTradingEnv(gym.Env):
             else:
                 terminated = True
 
-        # ----- bar return & P/L -----
         if self._idx < len(self._close):
             ret = self._bar_return(idx_prev, self._idx)
         else:
@@ -203,24 +179,21 @@ class BTCTradingEnv(gym.Env):
         if not np.isfinite(self._equity):
             raise FloatingPointError("Equity became NaN or inf")
 
-        # ----- funding every 8 h (480 bars) -----
         if self.funding_enabled and (self._idx % 480 == 0):
             fr = float(self._fund_rates[self._idx])
             self._equity *= (1.0 + self.leverage * self._position * fr)
 
         reward = np.float32(equity_change)
-        alpha = 0.001  # EWMA smoothing
+        alpha = 0.001
         self._rw_mean = (1 - alpha) * self._rw_mean + alpha * reward
         diff = reward - self._rw_mean
         self._rw_var = (1 - alpha) * self._rw_var + alpha * diff * diff
         reward_norm = reward / (1e-8 + self._rw_var ** 0.5)
 
 
-        # draw-down kill-switch
         if self._equity < self._equity_floor:
             terminated = True
 
-        # ----- observation & info -----
         obs = self._get_observation()
         info = {
             "t": self._t,
@@ -238,9 +211,6 @@ class BTCTradingEnv(gym.Env):
         return obs, reward_norm, terminated, truncated, info
 
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
     def _slice_bounds(self, mode: str) -> Tuple[int, int]:
         s = self._splits
         if mode == "train":
@@ -273,7 +243,6 @@ class BTCTradingEnv(gym.Env):
 
     def _exec_trade(self, action: int) -> tuple[float, float]:
 
-        # 1. translate action to the position we WANT after this bar
         desired_pos = (
             self._position  # Hold keeps current
             if action == 0 else
@@ -281,11 +250,9 @@ class BTCTradingEnv(gym.Env):
             -1  # action == 2
         )
 
-        # 2. no trade → no costs
         if desired_pos == self._position:
             return 0.0, 0.0
 
-        # 3. choose commission side
         if self.np_random.random() < self._maker_prob:
             comm_pct = self._commission_maker
         else:
@@ -294,21 +261,15 @@ class BTCTradingEnv(gym.Env):
         commission_cost = comm_pct
         slippage_cost = self._spread_pct
 
-        # 4. update position
         self._position = desired_pos
         return commission_cost, slippage_cost
 
-    # ------------------------------------------------------------------
-    # ---------------------------------------------------------------------
-    # RENDER: quick Matplotlib view (price + equity)
-    # ---------------------------------------------------------------------
     def render(self, mode: str = "human"):
         if mode != "human":
-            return  # only human mode supported
+            return
 
         import matplotlib.pyplot as plt
 
-        # cache history in object attributes
         if not hasattr(self, "_render_cache"):
             self._render_cache = {"t": [], "price": [], "equity": []}
 
@@ -316,7 +277,6 @@ class BTCTradingEnv(gym.Env):
         self._render_cache["price"].append(float(self._close[self._idx]))
         self._render_cache["equity"].append(float(self._equity))
 
-        # update plot once every 300 steps to avoid slowdown
         if self._t % 300 != 0 and self._t != self.max_steps:
             return
 

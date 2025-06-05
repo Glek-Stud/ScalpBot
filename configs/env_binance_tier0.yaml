@@ -1,10 +1,10 @@
-contract_value:       1.0
-maker_pct:            0.00018
-taker_pct:            0.00036
+contract_value:       10.0
+maker_pct:            0.00000
+taker_pct:            0.04
 use_maker_probability: 0.25
 spread_pct:           0.0001
 lambda_penalty_factor: 0.05
-leverage:             2
+leverage:             1
 equity_floor:         0.5
 funding_enabled:      false
 funding_parquet:      funding_rates.parquet

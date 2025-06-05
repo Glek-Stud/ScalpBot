@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Literal
 
 import json
+
+import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
@@ -182,35 +184,42 @@ class DQNTrainer:
         self._save_ckpt(f"final_{self.step}")
 
     def evaluate(self, split: Literal["val", "test"] = "test",
-                 render: bool = False) -> dict[str, float]:
-        """Run a full episode without exploration and compute metrics."""
+                 render: bool = False,
+                 save_dir: str | Path | None = None) -> dict[str, float]:
         env = self.env_val if split == "val" else make_env(split, 999)
         obs, _ = env.reset()
-        equity = []
-        trades = []
+        equity, actions, trades = [], [], []
 
         done = False
         while not done:
             q = self.online(obs[None])[0].numpy()
             action = int(q.argmax())
             obs, rew, done, trunc, info = env.step(action)
-            equity.append(info.get("equity", 0.0))
+            equity.append(info["equity"])
+            actions.append(action)
             trades.append(rew)
             if render:
                 env.render()
 
-        equity = np.array(equity)
+        # ---------- artefact export -----------------
+        if save_dir is not None:
+            save_dir = Path(save_dir)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            df = pd.DataFrame({"equity": equity, "action": actions, "reward": trades})
+            df.to_csv(save_dir / f"equity_{split}.csv", index=False)
+        # --------------------------------------------
+
+        equity = np.asarray(equity, dtype=np.float32)
         returns = np.diff(equity) / equity[:-1]
+        trades = np.asarray(trades, dtype=np.float32)
 
-        trades = np.array(trades, dtype=np.float32)  # ← add this line
-
-        metrics = {
+        return {
             "Sharpe": _sharpe(returns),
             "WinRate[%]": _win_rate(trades),
             "MaxDD[%]": _drawdown(equity),
-            "ProfitFactor": float(trades[trades > 0].sum() / (1e-8 + np.abs(trades[trades < 0]).sum())),
+            "ProfitFactor": float(trades[trades > 0].sum() /
+                                  (1e-8 + np.abs(trades[trades < 0]).sum())),
         }
-        return metrics
 
     # --------------------------------------------------------------------- #
     # internals                                                             #

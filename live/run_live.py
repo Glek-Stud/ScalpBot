@@ -21,7 +21,12 @@ async def main(cfg_path: str, dry: bool) -> None:
     cfg = yaml.safe_load(Path(cfg_path).read_text())
     client = await _make_client(None, None)
     stream = KlineStream(StreamConfig(cfg["symbol"], cfg.get("interval", "1m")), client)
-    broker = Broker(BrokerConfig(cfg["symbol"], cfg.get("leverage", 1), dry_run=dry or cfg.get("dry_run", True)))
+    broker = Broker(BrokerConfig(
+        cfg["symbol"],
+        cfg.get("leverage", 1),
+        dry_run=dry or cfg.get("dry_run", True),
+        starting_equity=cfg.get("starting_equity", 1000.0),
+    ))
     stats_file = Path("collect/data_final/norm_stats.json")
     with stats_file.open() as f:
         ns = json.load(f)

@@ -23,7 +23,14 @@ async def main(cfg_path: str, dry: bool) -> None:
     cfg = yaml.safe_load(Path(cfg_path).read_text())
     key, sec = load_keys()
     client = await _make_client(key, sec)
-    stream = KlineStream(StreamConfig(cfg["symbol"], cfg.get("interval", "1m")), client)
+    stream = KlineStream(
+        StreamConfig(
+            cfg["symbol"],
+            cfg.get("interval", "1m"),
+            cfg.get("resync_interval", 300),
+        ),
+        client,
+    )
     broker = Broker(BrokerConfig(
         cfg["symbol"],
         cfg.get("leverage", 1),

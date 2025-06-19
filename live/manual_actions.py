@@ -1,3 +1,5 @@
+"""Manual test CLI to open/close a long position using Broker."""
+
 from __future__ import annotations
 
 import argparse

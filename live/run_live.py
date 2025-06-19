@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import signal
 from pathlib import Path
 
 import numpy as np
@@ -15,13 +16,19 @@ from .features import FeatureExtractor, FeatureStats
 from .broker import Broker, BrokerConfig
 from .agent import DQNAgent
 from .env_live import BTCRealTradingEnv
+from .stats import StatsTracker
 
 
 async def main(cfg_path: str, dry: bool) -> None:
     cfg = yaml.safe_load(Path(cfg_path).read_text())
     client = await _make_client(None, None)
     stream = KlineStream(StreamConfig(cfg["symbol"], cfg.get("interval", "1m")), client)
-    broker = Broker(BrokerConfig(cfg["symbol"], cfg.get("leverage", 1), dry_run=dry or cfg.get("dry_run", True)))
+    broker = Broker(BrokerConfig(
+        cfg["symbol"],
+        cfg.get("leverage", 1),
+        dry_run=dry or cfg.get("dry_run", True),
+        starting_equity=cfg.get("starting_equity", 1000.0),
+    ))
     stats_file = Path("collect/data_final/norm_stats.json")
     with stats_file.open() as f:
         ns = json.load(f)
@@ -29,6 +36,8 @@ async def main(cfg_path: str, dry: bool) -> None:
     extractor = FeatureExtractor(stats)
     env = BTCRealTradingEnv(extractor, broker)
     agent = DQNAgent(cfg["state_path"])
+    logger = StatsTracker(Path(cfg.get("log_dir", "live_logs")),
+                          start_equity=cfg.get("starting_equity", 1000.0))
 
     async def producer():
         await stream.start()
@@ -38,11 +47,35 @@ async def main(cfg_path: str, dry: bool) -> None:
         while True:
             msg = await stream.get()
             broker.update_kline(msg)
-            obs, _, term, _, _ = env.step(agent.act(obs))
+            action = agent.act(obs)
+            obs, reward, term, _, _ = env.step(action)
+            logger.update(reward, action != 0)
+            if logger.step % cfg.get("log_interval", 100) == 0:
+                logger.flush()
             if term:
                 obs, _ = env.reset()
 
-    await asyncio.gather(producer(), consumer())
+    prod_task = asyncio.create_task(producer())
+    cons_task = asyncio.create_task(consumer())
+
+    def _stop() -> None:
+        prod_task.cancel()
+        cons_task.cancel()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _stop)
+
+    try:
+        await asyncio.gather(prod_task, cons_task)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        logger.flush()
+        try:
+            broker.close_position()
+        except Exception:
+            pass
 
 
 def parse_args():

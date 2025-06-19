@@ -6,3 +6,4 @@ log_dir: live_logs
 state_path: dqn_best.keras
 dry_run: true
 resync_interval: 300
+log_interval: 100

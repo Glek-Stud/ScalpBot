@@ -8,6 +8,8 @@ import json
 import signal
 from pathlib import Path
 
+import pandas as pd
+
 import numpy as np
 import yaml
 
@@ -41,7 +43,20 @@ async def main(cfg_path: str, dry: bool) -> None:
     stats_file = Path("collect/data_final/norm_stats.json")
     with stats_file.open() as f:
         ns = json.load(f)
-    stats = FeatureStats(mean=np.array(ns["mean"]), std=np.array(ns["std"]), lowvol_p5=float(ns["p5_volume"]))
+
+    if "p5_volume" in ns:
+        lowvol_p5 = float(ns["p5_volume"])
+    else:
+        # Fall back to computing the threshold from the raw dataset
+        vol_path = Path("collect/data_final/btcusdt_1m_20240511‑20250511.parquet")
+        vol = pd.read_parquet(vol_path, columns=["Volume"])
+        lowvol_p5 = float(vol["Volume"].quantile(0.05))
+
+    stats = FeatureStats(
+        mean=np.array(ns["mean"]),
+        std=np.array(ns["std"]),
+        lowvol_p5=lowvol_p5,
+    )
     extractor = FeatureExtractor(stats)
     env = BTCRealTradingEnv(extractor, broker)
     agent = DQNAgent(cfg["state_path"])

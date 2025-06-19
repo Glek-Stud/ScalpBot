@@ -1,9 +1,7 @@
 symbol: BTCUSDT
 interval: 1m
-leverage: 3
-# Binance minimum size for BTC is 0.001 BTC (~30 USDT at $30k)
-usd_per_trade: 10.0
-starting_equity: 1000.0
+leverage: 5
+starting_equity: 100
 log_dir: live_logs
 state_path: dqn_best.keras
 dry_run: true

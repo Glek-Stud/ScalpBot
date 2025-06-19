@@ -1,5 +1,3 @@
-"""Live trading environment wrapping Binance broker and feature stream."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -11,8 +9,6 @@ from .broker import Broker
 
 
 class BTCRealTradingEnv(gym.Env):
-    """Gym-compatible environment for live BTC trading."""
-
     metadata = {"render_modes": ["human"], "render_fps": 30}
 
     def __init__(self, extractor: FeatureExtractor, broker: Broker, max_steps: int = 10_000) -> None:

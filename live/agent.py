@@ -1,5 +1,3 @@
-"""DQN agent wrapper for live trading."""
-
 from __future__ import annotations
 
 import numpy as np

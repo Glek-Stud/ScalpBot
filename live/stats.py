@@ -1,5 +1,3 @@
-"""Performance statistics tracker for live trading."""
-
 from __future__ import annotations
 
 import json
@@ -22,9 +20,7 @@ class StatsTracker:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.equity[0] = self.start_equity
 
-    # ------------------------------------------------------------------
     def update(self, reward: float, position_changed: bool) -> None:
-        """Add step reward and optionally trade result."""
         self.step += 1
         new_eq = self.equity[-1] * (1.0 + reward)
         self.equity.append(new_eq)
@@ -32,7 +28,6 @@ class StatsTracker:
         if position_changed:
             self.trades.append(reward)
 
-    # ------------------------------------------------------------------
     def metrics(self) -> dict[str, float]:
         if not self.returns:
             return {"Sharpe": 0.0, "WinRate": 0.0, "MaxDD": 0.0}

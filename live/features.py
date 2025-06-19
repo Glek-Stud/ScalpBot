@@ -1,5 +1,3 @@
-"""Incremental feature computation matching training pipeline."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

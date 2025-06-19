@@ -1,5 +1,3 @@
-"""WebSocket streaming of Binance 1m klines."""
-
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +9,6 @@ from binance.exceptions import BinanceAPIException
 
 
 async def _make_client(api_key: str, api_secret: str) -> AsyncClient:
-    """Create the Binance async client."""
     return await AsyncClient.create(api_key, api_secret)
 
 
@@ -47,7 +44,6 @@ class KlineStream:
                         ):
                             break
             except BinanceAPIException:
-                # WebSocket failed; fetch last bar via REST as fallback
                 try:
                     rest = await self.client.get_klines(
                         symbol=self.cfg.symbol,

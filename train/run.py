@@ -1,19 +1,15 @@
-# train/run.py ─ one-click entry-point for train / eval
 from __future__ import annotations
 
 from __future__ import annotations
 import argparse
-import sys                         # already used for tensorboard call
-import json                        # ← NEW
-from dataclasses import asdict     # ← NEW
+import sys
+import json
+from dataclasses import asdict
 from pathlib import Path
 
 from .seeding import set_global_seed
 from .trainer import DQNTrainer, TrainerParams
 
-# ───────────────────────────────────────────────────────────────
-# CLI parser
-# ───────────────────────────────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -57,16 +53,11 @@ def _parse_args() -> argparse.Namespace:
 
     return p.parse_args()
 
-
-# ───────────────────────────────────────────────────────────────
-# main
-# ───────────────────────────────────────────────────────────────
 def main() -> None:
     args = _parse_args()
     set_global_seed(args.seed)
 
 
-    # Common hyper-params (adjust as desired)
     params = TrainerParams(
         lr=3e-4,
         batch_size=256,
@@ -76,23 +67,20 @@ def main() -> None:
         prioritised=True,
     )
 
-    # Instantiate trainer — pass dueling flag to choose architecture
     trainer = DQNTrainer(
         seed=args.seed,
         logdir=args.logdir,
         params=params,
         cfg_name=args.cfg,
-        dueling=args.dueling,      # <-- the switch is forwarded here
+        dueling=args.dueling,
     )
 
     if args.mode == "train":
         trainer.train(max_steps=400_000)
 
-        # ── (2) BACK-TEST on test slice & save equity CSV ─────────
         metrics = trainer.evaluate("test", save_dir="reports")
         print("Test metrics:", metrics)  # console summary
 
-        # ── (3) SAVE hyper-params & env YAML to /reports ----------
         from pathlib import Path, shutil
         import json
         Path("reports").mkdir(exist_ok=True)
@@ -101,7 +89,6 @@ def main() -> None:
         shutil.copy(Path("configs") / args.cfg,
                     "reports/env_used.yaml")
 
-        # ── (4) EXPORT learning curves from TensorBoard -----------
         import subprocess, sys
         subprocess.run([
             sys.executable, "-m", "tensorboard", "dataexport",
@@ -110,14 +97,12 @@ def main() -> None:
             "--out_format", "csv",
         ], stdout=open("reports/learning_curves.csv", "w"))
 
-        # ── (5) SAVE model in .keras format -----------------------
         trainer.online.save("reports/dqn_best.keras",
                             include_optimizer=False)
 
 
 
     else:  # eval / back-test
-        # load best checkpoint then evaluate on test slice
         ckpt = args.logdir / "checkpoints" / "dqn_best.h5"
         trainer.online.load_weights(ckpt)
         metrics = trainer.evaluate("test")

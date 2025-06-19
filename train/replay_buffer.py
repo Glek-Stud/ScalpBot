@@ -1,5 +1,3 @@
-# train/replay_buffer.py
-"""Ring-buffer replay memory with optional rank-based prioritisation."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
@@ -9,11 +7,10 @@ import numpy as np
 
 @dataclass(slots=True)
 class Transition:
-    """Simple container to keep the typing clear."""
-    state:    np.ndarray  # shape = (obs_dim,)
+    state:    np.ndarray
     action:   int
     reward:   float
-    next_s:   np.ndarray  # shape = (obs_dim,)
+    next_s:   np.ndarray
     done:     bool
 
 
@@ -29,24 +26,19 @@ class ReplayBuffer:
         self.prioritised = prioritised
         self.alpha      = alpha
 
-        # Pre-allocate contiguous arrays
         self._states  = np.empty((capacity, obs_dim), dtype=np.float32)
         self._actions = np.empty((capacity,),        dtype=np.int32)
         self._rewards = np.empty((capacity,),        dtype=np.float32)
         self._next_s  = np.empty((capacity, obs_dim), dtype=np.float32)
         self._dones   = np.empty((capacity,),        dtype=np.bool_)
 
-        # For PER: store priorities (1 = uninformative baseline)
+
         self._prio    = np.ones((capacity,), dtype=np.float32)
 
-        self._idx  = 0      # next insert position
-        self.size  = 0      # how many valid samples so far
+        self._idx  = 0
+        self.size  = 0
 
-    # ------------------------------------------------------------------ #
-    # public API                                                          #
-    # ------------------------------------------------------------------ #
     def add(self, tr: Transition, td_error: float | None = None) -> None:
-        """Insert a transition (overwrite oldest)."""
         i = self._idx
         self._states[i]  = tr.state
         self._actions[i] = tr.action
@@ -58,14 +50,13 @@ class ReplayBuffer:
         self._advance()
 
     def sample(self, batch: int, beta: float = 1.0) -> Tuple[np.ndarray, ...]:
-        """Return a batch (states, actions, rewards, next_states, dones, idx)."""
         idx = self._sample_indices(batch)
         p = self._prio[idx]
 
         probs = p / p.sum()
-        N = max(1, self.size)  # current buffer length
+        N = max(1, self.size)
         weights = (N * probs) ** (-beta)
-        weights /= weights.max()  # normalise to ≤ 1
+        weights /= weights.max()
 
         batch = (self._states[idx],
                 self._actions[idx],
@@ -78,14 +69,10 @@ class ReplayBuffer:
         return batch
 
     def update_priority(self, idx: np.ndarray, td_errors: np.ndarray) -> None:
-        """Post-learning priority update (only if prioritised)."""
         if not self.prioritised:
             return
         self._prio[idx] = self._td_to_priority(td_errors)
 
-    # ------------------------------------------------------------------ #
-    # internal helpers                                                    #
-    # ------------------------------------------------------------------ #
     def _advance(self) -> None:
         self._idx = (self._idx + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)

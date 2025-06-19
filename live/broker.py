@@ -1,21 +1,18 @@
-"""Thin wrapper around Binance REST API."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 try:
-    from binance.client import Client  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+    from binance.client import Client
+except Exception:
     Client = None
 try:
-    from binance.exceptions import BinanceAPIException  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    BinanceAPIException = Exception  # type: ignore
+    from binance.exceptions import BinanceAPIException
+except Exception:
+    BinanceAPIException = Exception
 
 
 def load_keys(path: str | None = None):
-    """Return Binance API keys from an ``ipynb`` file inside the repo."""
     import json
     from pathlib import Path
 
@@ -65,12 +62,7 @@ class Broker:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
-    # helper methods
-    # ------------------------------------------------------------------
-
     def _mark_price(self) -> float:
-        """Return current mark price for configured symbol."""
         try:
             data = self.client.futures_mark_price(symbol=self.cfg.symbol)
             return float(data["markPrice"])
@@ -90,11 +82,8 @@ class Broker:
             except Exception:
                 pass
         qty = usd / price
-        # Round to six decimals and clamp to Binance minimum lot size
         qty = max(qty, 0.001)
         return float(f"{qty:.6f}")
-
-    # ------------------------------------------------------------------
 
     def update_kline(self, kline: dict):
         self.last_kline = {
@@ -106,7 +95,6 @@ class Broker:
         }
 
     def execute(self, desired_pos: int):
-        """Flatten then open position according to ``desired_pos``."""
         if desired_pos == self.position:
             return 0.0, self.position
 
@@ -156,10 +144,6 @@ class Broker:
 
         self.position = desired_pos
         return 0.0, self.position
-
-    # ------------------------------------------------------------------
-    # manual trade helpers
-    # ------------------------------------------------------------------
 
     def open_long(self) -> dict:
         price = self._mark_price()

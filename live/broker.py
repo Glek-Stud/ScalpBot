@@ -52,7 +52,11 @@ class Broker:
         self.qty = 0.0
         try:
             if not cfg.dry_run:
-                self.client.futures_change_leverage(symbol=cfg.symbol, leverage=cfg.leverage)
+                self.client.futures_change_leverage(
+                    symbol=cfg.symbol,
+                    leverage=cfg.leverage,
+                    recvWindow=5000,
+                )
         except Exception:
             pass
 
@@ -111,6 +115,7 @@ class Broker:
                     side=side,
                     type="MARKET",
                     quantity=self.qty,
+                    recvWindow=5000,
                     reduceOnly=True,
                 )
             except Exception:
@@ -124,6 +129,7 @@ class Broker:
                     side=side,
                     type="MARKET",
                     quantity=qty,
+                    recvWindow=5000,
                 )
             except Exception:
                 pass
@@ -151,6 +157,7 @@ class Broker:
             side="BUY",
             type="MARKET",
             quantity=qty,
+            recvWindow=5000,
         )
         self.position = 1
         return resp
@@ -168,6 +175,7 @@ class Broker:
             side="SELL",
             type="MARKET",
             quantity=qty,
+            recvWindow=5000,
         )
         self.position = -1
         return resp
@@ -190,6 +198,7 @@ class Broker:
             type="MARKET",
             quantity=qty,
             reduceOnly=True,
+            recvWindow=5000,
         )
         self.position = 0
         self.qty = 0.0

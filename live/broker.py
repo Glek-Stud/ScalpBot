@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from binance.client import Client
+try:
+    from binance.client import Client  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    Client = None
 
 
 def load_keys(path: str | None = None):
@@ -39,6 +42,8 @@ class BrokerConfig:
 
 class Broker:
     def __init__(self, cfg: BrokerConfig):
+        if Client is None:
+            raise ImportError("python-binance package is required to use Broker")
         key, sec = load_keys()
         self.client = Client(key, sec)
         self.cfg = cfg

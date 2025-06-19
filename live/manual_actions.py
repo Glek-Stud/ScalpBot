@@ -32,12 +32,18 @@ def main(cfg_path: str) -> None:
         if act == "1":
             resp = broker.open_long()
             print("Opened:", resp)
+            if isinstance(resp, dict) and "error" in resp:
+                print("Error:", resp["error"])
         elif act == "2":
             resp = broker.open_short()
             print("Opened:", resp)
+            if isinstance(resp, dict) and "error" in resp:
+                print("Error:", resp["error"])
         elif act == "3":
             resp = broker.close_position()
             print("Closed:", resp)
+            if isinstance(resp, dict) and "error" in resp:
+                print("Error:", resp["error"])
         elif act.lower() == "q":
             break
 

@@ -1,6 +1,7 @@
 symbol: BTCUSDT
 interval: 1m
 leverage: 3
+usd_per_trade: 10.0
 starting_equity: 1000.0
 log_dir: live_logs
 state_path: dqn_best.keras

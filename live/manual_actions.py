@@ -23,6 +23,7 @@ def main(cfg_path: str) -> None:
             cfg.get("leverage", 1),
             dry_run=cfg.get("dry_run", True),
             starting_equity=cfg.get("starting_equity", 1000.0),
+            usd_per_trade=cfg.get("usd_per_trade", 10.0),
         )
     )
     while True:

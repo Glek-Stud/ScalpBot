@@ -42,6 +42,7 @@ class BrokerConfig:
     leverage: int
     dry_run: bool = True
     starting_equity: float = 1000.0
+    usd_per_trade: float = 10.0
 
 
 class Broker:
@@ -77,13 +78,14 @@ class Broker:
             return float(self.last_kline["close"])
 
     def _calc_qty(self, price: float) -> float:
-        usd = self.cfg.starting_equity * self.cfg.leverage
+        usd = self.cfg.usd_per_trade * self.cfg.leverage
         if not self.cfg.dry_run:
             try:
                 balances = self.client.futures_account_balance()
                 for b in balances:
                     if b.get("asset") == "USDT":
-                        usd = float(b.get("availableBalance", 0.0)) * self.cfg.leverage
+                        avail = float(b.get("availableBalance", 0.0)) * self.cfg.leverage
+                        usd = min(usd, avail)
                         break
             except Exception:
                 pass

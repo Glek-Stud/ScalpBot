@@ -13,7 +13,9 @@ class DummyClient:
 def test_open_close_dryrun(monkeypatch):
     monkeypatch.setattr(br, "Client", lambda k, s: DummyClient())
     monkeypatch.setattr(br, "load_keys", lambda: ("k", "s"))
-    cfg = BrokerConfig("BTCUSDT", 1, dry_run=True, starting_equity=100)
+    cfg = BrokerConfig(
+        "BTCUSDT", 1, dry_run=True, starting_equity=100, usd_per_trade=10
+    )
     b = Broker(cfg)
     b.last_kline = {"close": 30000}
     open_resp = b.open_long()

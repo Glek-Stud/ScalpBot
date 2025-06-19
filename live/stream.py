@@ -9,8 +9,9 @@ from typing import Any
 from binance import AsyncClient, BinanceSocketManager
 
 
-def _make_client(api_key: str, api_secret: str) -> AsyncClient:
-    return AsyncClient(api_key, api_secret)
+async def _make_client(api_key: str, api_secret: str) -> AsyncClient:
+    """Create the Binance async client."""
+    return await AsyncClient.create(api_key, api_secret)
 
 
 @dataclass

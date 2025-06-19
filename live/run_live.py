@@ -13,7 +13,7 @@ import yaml
 
 from .stream import _make_client, StreamConfig, KlineStream
 from .features import FeatureExtractor, FeatureStats
-from .broker import Broker, BrokerConfig
+from .broker import Broker, BrokerConfig, load_keys
 from .agent import DQNAgent
 from .env_live import BTCRealTradingEnv
 from .stats import StatsTracker
@@ -21,7 +21,8 @@ from .stats import StatsTracker
 
 async def main(cfg_path: str, dry: bool) -> None:
     cfg = yaml.safe_load(Path(cfg_path).read_text())
-    client = await _make_client(None, None)
+    key, sec = load_keys()
+    client = await _make_client(key, sec)
     stream = KlineStream(StreamConfig(cfg["symbol"], cfg.get("interval", "1m")), client)
     broker = Broker(BrokerConfig(
         cfg["symbol"],

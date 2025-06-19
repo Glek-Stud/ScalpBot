@@ -90,7 +90,9 @@ class Broker:
             except Exception:
                 pass
         qty = usd / price
-        return float(f"{qty:.3f}")
+        # Round to six decimals and clamp to Binance minimum lot size
+        qty = max(qty, 0.001)
+        return float(f"{qty:.6f}")
 
     # ------------------------------------------------------------------
 

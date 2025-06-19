@@ -36,6 +36,7 @@ async def main(cfg_path: str, dry: bool) -> None:
         cfg.get("leverage", 1),
         dry_run=dry or cfg.get("dry_run", True),
         starting_equity=cfg.get("starting_equity", 1000.0),
+        usd_per_trade=cfg.get("usd_per_trade", 10.0),
     ))
     stats_file = Path("collect/data_final/norm_stats.json")
     with stats_file.open() as f:

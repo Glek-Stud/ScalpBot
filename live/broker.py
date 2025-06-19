@@ -8,6 +8,10 @@ try:
     from binance.client import Client  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     Client = None
+try:
+    from binance.exceptions import BinanceAPIException  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    BinanceAPIException = Exception  # type: ignore
 
 
 def load_keys(path: str | None = None):
@@ -74,6 +78,15 @@ class Broker:
 
     def _calc_qty(self, price: float) -> float:
         usd = self.cfg.starting_equity * self.cfg.leverage
+        if not self.cfg.dry_run:
+            try:
+                balances = self.client.futures_account_balance()
+                for b in balances:
+                    if b.get("asset") == "USDT":
+                        usd = float(b.get("availableBalance", 0.0)) * self.cfg.leverage
+                        break
+            except Exception:
+                pass
         qty = usd / price
         return float(f"{qty:.3f}")
 
@@ -152,15 +165,18 @@ class Broker:
             print(f"[DRY-RUN] BUY {qty} {self.cfg.symbol} @ {price}")
             self.position = 1
             return {"side": "BUY", "qty": qty, "price": price}
-        resp = self.client.futures_create_order(
-            symbol=self.cfg.symbol,
-            side="BUY",
-            type="MARKET",
-            quantity=qty,
-            recvWindow=5000,
-        )
-        self.position = 1
-        return resp
+        try:
+            resp = self.client.futures_create_order(
+                symbol=self.cfg.symbol,
+                side="BUY",
+                type="MARKET",
+                quantity=qty,
+                recvWindow=5000,
+            )
+            self.position = 1
+            return resp
+        except BinanceAPIException as e:
+            return {"error": str(e)}
 
     def open_short(self) -> dict:
         price = self._mark_price()
@@ -170,15 +186,18 @@ class Broker:
             print(f"[DRY-RUN] SELL {qty} {self.cfg.symbol} @ {price}")
             self.position = -1
             return {"side": "SELL", "qty": qty, "price": price}
-        resp = self.client.futures_create_order(
-            symbol=self.cfg.symbol,
-            side="SELL",
-            type="MARKET",
-            quantity=qty,
-            recvWindow=5000,
-        )
-        self.position = -1
-        return resp
+        try:
+            resp = self.client.futures_create_order(
+                symbol=self.cfg.symbol,
+                side="SELL",
+                type="MARKET",
+                quantity=qty,
+                recvWindow=5000,
+            )
+            self.position = -1
+            return resp
+        except BinanceAPIException as e:
+            return {"error": str(e)}
 
     def close_position(self) -> dict | None:
         if self.position == 0:
@@ -192,14 +211,17 @@ class Broker:
             self.position = 0
             self.qty = 0.0
             return {"side": side, "qty": qty, "price": price}
-        resp = self.client.futures_create_order(
-            symbol=self.cfg.symbol,
-            side=side,
-            type="MARKET",
-            quantity=qty,
-            reduceOnly=True,
-            recvWindow=5000,
-        )
-        self.position = 0
-        self.qty = 0.0
-        return resp
+        try:
+            resp = self.client.futures_create_order(
+                symbol=self.cfg.symbol,
+                side=side,
+                type="MARKET",
+                quantity=qty,
+                reduceOnly=True,
+                recvWindow=5000,
+            )
+            self.position = 0
+            self.qty = 0.0
+            return resp
+        except BinanceAPIException as e:
+            return {"error": str(e)}

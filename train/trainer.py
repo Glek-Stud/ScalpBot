@@ -37,10 +37,10 @@ class TrainerParams:
     buffer_cap: int = 100_000
     batch_size: int = 256
     gamma: float = 0.99
-    lr: float = 1.5e-4
-    target_freq: int = 100
+    lr: float = 3e-4
+    target_freq: int = 500
     warmup_steps: int = 2_000
-    eps_decay: int = 250_000
+    eps_decay: int = 120_000
     val_freq: int = 10_000
     patience: int = 20
     prioritised: bool  = True
@@ -74,7 +74,7 @@ class DQNTrainer:
             n_actions,
             lr=params.lr,
             hidden_sizes=(128, 128),
-            dueling=dueling  # ← pass flag
+            dueling=dueling
         )
 
         self.target, _, _ = build_q_network(
@@ -82,11 +82,11 @@ class DQNTrainer:
             n_actions,
             lr=params.lr,
             hidden_sizes=(128, 128),
-            dueling=dueling  # ← pass flag
+            dueling=dueling
         )
 
         dummy = tf.zeros((1, obs_dim), dtype=tf.float32)
-        _ = self.online(dummy)  # create weights
+        _ = self.online(dummy)
         _ = self.target(dummy)
 
         hard_update(self.target, self.online)

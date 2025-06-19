@@ -7,11 +7,11 @@ import numpy as np
 
 @dataclass(slots=True)
 class Transition:
-    state:    np.ndarray
-    action:   int
-    reward:   float
-    next_s:   np.ndarray
-    done:     bool
+    state: np.ndarray
+    action: int
+    reward: float
+    next_s: np.ndarray
+    done: bool
 
 
 class ReplayBuffer:

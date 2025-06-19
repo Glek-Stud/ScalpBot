@@ -7,13 +7,26 @@ from dataclasses import dataclass
 from binance.client import Client
 
 
-def load_keys(path="~/.binance_keys.json"):
+def load_keys(path: str | None = None):
+    """Return Binance API keys from an ``ipynb`` file inside the repo."""
     import json
     from pathlib import Path
-    p = Path(path).expanduser()
+
+    if path is None:
+        root = Path(__file__).resolve().parents[1]
+        path = root / "collect" / "Binance_keys.ipynb"
+    p = Path(path)
     with p.open() as f:
-        data = json.load(f)
-    return data["key"], data["secret"]
+        nb = json.load(f)
+
+    src = "".join(nb["cells"][0]["source"])
+    key = secret = None
+    for line in src.splitlines():
+        if "api_key" in line:
+            key = line.split("=", 1)[1].strip().strip("'\"").replace("\\n", "")
+        if "api_secret" in line:
+            secret = line.split("=", 1)[1].strip().strip("'\"")
+    return key, secret
 
 
 @dataclass

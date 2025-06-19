@@ -70,18 +70,21 @@ class Broker:
             return float(self.last_kline["close"])
 
     def _calc_qty(self, price: float) -> float:
-        usd = self.cfg.usd_per_trade * self.cfg.leverage
+        # Amount of USDT to commit to this trade (without leverage multiplier)
+        usd = self.cfg.usd_per_trade
         if not self.cfg.dry_run:
             try:
                 balances = self.client.futures_account_balance()
                 for b in balances:
                     if b.get("asset") == "USDT":
-                        avail = float(b.get("availableBalance", 0.0)) * self.cfg.leverage
+                        avail = float(b.get("availableBalance", 0.0))
                         usd = min(usd, avail)
                         break
             except Exception:
                 pass
         qty = usd / price
+        qty = max(qty, 0.001)
+        # Round to six decimals and clamp to Binance minimum lot size
         qty = max(qty, 0.001)
         return float(f"{qty:.6f}")
 
